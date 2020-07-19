@@ -7,57 +7,16 @@
 )
 
 (enable-console-print!)
-(println "starting threejs-cljs")
+(println "starting quadtree-viewer")
 
-(def root (quadtree/make-quadtree))
-(set! root (quadtree/insert-quadtree root nil 0.33 0.33 0.15))
-(def test-quadtree (quadtree/seek-quadtree root 0.33 0.33 0.15))
-(println (:bounds test-quadtree))
-(def test-segment (geometry/make-rect-lines (:bounds test-quadtree)))
-(println test-segment)
-
-(defn private-geometry-from-segments [segments geometry]
-  (loop
-    [
-      segs segments
-      geo []
-    ]
-    (if (empty? segs)
-      (clj->js geo)
-      (let
-        [
-          start (nth segs 0)
-          stop (nth segs 1)
-          vec3-start (js/THREE.Vector3. (* 100 (nth start 0)) (* 100 (nth start 1)) 0)
-          vec3-stop (js/THREE.Vector3. (* 100 (nth stop 0)) (* 100 (nth stop 1)) 0)
-          start-geo (conj geo vec3-start)
-          stop-geo (conj start-geo vec3-stop)
-        ]
-        ;;(println "start: " (. vec3-start -x) (. vec3-start -y) (. vec3-start -z))
-        ;;(println "stop: " vec3-stop)
-        (recur (subvec segs 2) stop-geo)
-      )
-    )
-  )
-)
-
-(defn geometry-from-segments [segments]
-  (private-geometry-from-segments segments (make-array 0))
-)
-
-(def geo (geometry-from-segments test-segment))
-(println geo)
-
-(def geo3 (js/THREE.Geometry. geo))
-(println geo3)
-
+;; make-square - Make THREE.js geometry for a planar square.
 (defn make-square []
   (let
     [
       geo (js/THREE.Geometry.)
       verts (. geo -vertices)
       faces (. geo -faces)
-      r 0.995 ;; inset square edge a little bit
+      r 0.995 ;; Inset square edge a little bit for esthetic reasons.
     ]
     (. verts push (js/THREE.Vector3. (- r) (- r) 0))
     (. verts push (js/THREE.Vector3. r (- r)  0))
@@ -74,21 +33,24 @@
   )
 )
 
-;; Reset root after tests.
-(set! root (quadtree/make-quadtree))
+;; Set root.
+(def root (quadtree/make-quadtree))
 
+;; Filter out repeated events.
 (def x-last 0)
 (def y-last 0)
 (def z-last 0)
 
+;; Add geometries to THREE.js group.
 (defn add-group-geometries [group geometries]
-  (println "group: " group)
+  ;;(println "group: " group)
   (if (empty? geometries)
     group
     (add-group-geometries (.add group (first geometries)) (rest geometries))
   )
 )
 
+;; Internal make-square helper.
 (defn private-make-squares [num result]
   (if (> num 0)
     (let
@@ -104,12 +66,18 @@
   )
 )
 
+;; make-squares - create a collestion of square to draw.
 (defn make-squares [num]
   (private-make-squares num '())
 )
 
+;; Create a collection of 9 drawable squares.
+;; NOTE: you need at most 9 squares, one of the center and
+;; 8 for the neighbors that surround it on the screen.
+;; NOTE: due to a bug, the sides of the window may appear to be empty.
 (def group-squares (add-group-geometries (js/THREE.Group.) (make-squares 9)))
 
+;; render-candidate - Update transformation for a drawable node.
 (defn render-candidate [candidate geometry]
   (if (nil? candidate)
     (set! (.. geometry -visible) js/false)
@@ -133,6 +101,7 @@
   )
 )
 
+;; private-render-candidates - internal helper to render all potentially visible nodes.
 (defn private-render-candidates [candidates group-children idx group-length]
   (if (< idx group-length)
     (do
@@ -142,6 +111,7 @@
   )
 )
 
+;; render-candidates - render all potentially visible nodes (candidates).
 (defn render-candidates [candidates]
   (let
     [
@@ -150,12 +120,9 @@
     ]
     (private-render-candidates candidates group-children 0 group-length)
   )
-  ;;(if (not (nil? candidates))
-  ;;  (render-candidate (first candidates) group)
-  ;;  (render-candidates (rest candidates) group)
-  ;;)
 )
 
+;; main
 (defn ^:export quadtree-viewer []
   (let
     [
@@ -163,13 +130,8 @@
       width (.-innerWidth js/window)
       height (.-innerHeight js/window)
       aspect-ratio (/ width height)
-      ;;camera (js/THREE.OrthographicCamera. (* -1 aspect-ratio) (* 1 aspect-ratio) -1 1 -0.001 10.0)
       camera (js/THREE.PerspectiveCamera. 91 aspect-ratio 0.00001 2 )
       renderer (js/THREE.WebGLRenderer.)
-      geometry (make-square) ;; square-geo ;;  (js/THREE.CubeGeometry. 1 1 1)
-      wireframe (js/THREE.WireframeGeometry. geometry)
-      material (js/THREE.LineBasicMaterial. );;(js/THREE.MeshBasicMaterial. (clj->js {:color 0x00ff00}))
-      cube (js/THREE.LineSegments. wireframe);;(js/THREE.Mesh. geometry material)
       render (fn cb []
         (js/requestAnimationFrame cb)
         (let
@@ -179,43 +141,34 @@
             z (.. camera -position -z)
           ]
 
-          ;; Don't traverse quadtree if camera has not moved.
+          ;; If camera is unchanged, don't traverse quadtree to flesh it out
+          ;; and find renderable candidates.
           (if (or (not (== x x-last)) (not (== y y-last)) (not (== z z-last)))
             (do
-              (pr "current cursor: " x y z) ;; DEBUG
+              (println "current cursor: " x y z) ;; DEBUG
+
+              ;; Fill out root to include cursor location and save it globally.
               (set! root (quadtree/expand-quadtree root (geometry/make-rect (- x z) (- y z) (+ x z) (+ y z)) z))
               (let
                 [
+                  ;; Cull all nodes except those near cursor at appropriate depth.
                   size (geometry/Point. z z)
                   center (geometry/Point. x y)
                   bounds (geometry/Rect. (geometry/sub-point center size) (geometry/add-point center size))
                   candidates (quadtree/filter-quadtree root bounds z)
-                  leaf (quadtree/seek-quadtree root x y z)
-                  bounds (:bounds leaf)
-                  x-lo (:x (:lo bounds))
-                  y-lo (:y (:lo bounds))
-                  x-hi (:x (:hi bounds))
-                  y-hi (:y (:hi bounds))
-                  x-mid (* 0.5 (+ x-hi x-lo))
-                  y-mid (* 0.5 (+ y-hi y-lo))
-                  x-scale (* 0.5 (- x-hi x-lo))
-                  y-scale (* 0.5 (- y-hi y-lo))
                 ]
                 (println "Number of candidates: " (count candidates))
-                ;;(set! (.. cube -position -x) x-mid)
-                ;;(set! (.. cube -position -y) (- y-mid))
-                ;;(set! (.. cube -scale -x) x-scale)
-                ;;(set! (.. cube -scale -y) y-scale)
                 (render-candidates candidates)
               )
             )
           )
 
-          (.render renderer scene camera)
-
+          ;; Update last cursor location.
           (set! x-last x)
           (set! y-last y)
           (set! z-last z)
+
+          (.render renderer scene camera)
         )
       )
     ]
@@ -229,3 +182,49 @@
 )
 
 (quadtree-viewer)
+
+(comment .....
+  ;; Random debug and test junk.
+  (defn private-geometry-from-segments [segments geometry]
+    (loop
+      [
+        segs segments
+        geo []
+      ]
+      (if (empty? segs)
+        (clj->js geo)
+        (let
+          [
+            start (nth segs 0)
+            stop (nth segs 1)
+            vec3-start (js/THREE.Vector3. (* 100 (nth start 0)) (* 100 (nth start 1)) 0)
+            vec3-stop (js/THREE.Vector3. (* 100 (nth stop 0)) (* 100 (nth stop 1)) 0)
+            start-geo (conj geo vec3-start)
+            stop-geo (conj start-geo vec3-stop)
+          ]
+          ;;(println "start: " (. vec3-start -x) (. vec3-start -y) (. vec3-start -z))
+          ;;(println "stop: " vec3-stop)
+          (recur (subvec segs 2) stop-geo)
+        )
+      )
+    )
+  )
+
+  (defn geometry-from-segments [segments]
+    (private-geometry-from-segments segments (make-array 0))
+  )
+
+  (def geo (geometry-from-segments test-segment))
+  (println geo)
+
+  (def geo3 (js/THREE.Geometry. geo))
+  (println geo3)
+
+
+  (def test-root (quadtree/make-quadtree))
+  (set! test-root (quadtree/insert-quadtree test-root nil 0.33 0.33 0.15))
+  (def test-quadtree (quadtree/seek-quadtree test-root 0.33 0.33 0.15))
+  (println (:bounds test-quadtree))
+  (def test-segment (geometry/make-rect-lines (:bounds test-quadtree)))
+  (println test-segment)
+....)

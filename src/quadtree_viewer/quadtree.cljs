@@ -2,12 +2,11 @@
   (:require [quadtree-viewer.geometry :as geometry])
 )
 
+;; Quadtree - a quadtree node tuple of a bounding rectangle, four children,
+;; and a domain specific data object associated with this node.
 (defrecord Quadtree [bounds child00 child01 child10 child11 data])
 
-(defn make-point [x y]
-  (geometry/Point. x y)
-  )
-
+;; Convenience function to create a sparse quadtree node.
 (defn make-quadtree []
   (Quadtree. (geometry/make-rect -1 -1 1 1) nil nil nil nil nil)
 )
@@ -33,17 +32,22 @@
           lo (:lo (:bounds quadtree))
           hi (:hi (:bounds quadtree))
           mid (geometry/mid-point lo hi)
+
+          ;; TODO: refactor
           bounds00 (geometry/make-rect (:x lo) (:y lo) (:x mid) (:y mid))
-          bounds01 (geometry/make-rect (:x lo) (:y mid) (:x mid) (:y hi))
-          bounds10 (geometry/make-rect (:x mid) (:y lo) (:x hi) (:y mid))
-          bounds11 (geometry/make-rect (:x mid) (:y mid) (:x hi) (:y hi))
           child00 (valid-quadtree (:child00 quadtree) bounds00)
-          child01 (valid-quadtree (:child01 quadtree) bounds01)
-          child10 (valid-quadtree (:child10 quadtree) bounds10)
-          child11 (valid-quadtree (:child11 quadtree) bounds11)
           expanded-child00 (expand-quadtree child00 bounds (* depth 2))
+
+          bounds01 (geometry/make-rect (:x lo) (:y mid) (:x mid) (:y hi))
+          child01 (valid-quadtree (:child01 quadtree) bounds01)
           expanded-child01 (expand-quadtree child01 bounds (* depth 2))
+
+          bounds10 (geometry/make-rect (:x mid) (:y lo) (:x hi) (:y mid))
+          child10 (valid-quadtree (:child10 quadtree) bounds10)
           expanded-child10 (expand-quadtree child10 bounds (* depth 2))
+
+          bounds11 (geometry/make-rect (:x mid) (:y mid) (:x hi) (:y hi))
+          child11 (valid-quadtree (:child11 quadtree) bounds11)
           expanded-child11 (expand-quadtree child11 bounds (* depth 2))
         ]
         ;; Expand quadtree's children to specified depth.
@@ -56,6 +60,7 @@
   )
 )
 
+;; Internal helper function to filter/cull quadtree nodes.
 (defn private-filter-quadtree [quadtree bounds depth results]
   (if (>= depth 1)
     (if (geometry/is-empty-rect (geometry/intersect-rect bounds (:bounds quadtree)))
@@ -77,10 +82,13 @@
   )
 )
 
+;; Filer/cull quadtree nodes that are inside bounds at appropriate depth.
+;; NOTE: the quadtree root must be properly expanded for this to work correctly.
 (defn filter-quadtree [quadtree bounds depth]
   (private-filter-quadtree quadtree bounds depth '())
 )
 
+;; OBSOLETE - exploratory prototype code
 (defn private-insert-quadtree [quadtree data x y z x-mid y-mid scale]
   ;; (println " x:" x " y: " y " z: " z " x-mid: " x-mid " y-mid: " y-mid " scale: " scale) ;; DEBUG
   (let
@@ -142,10 +150,12 @@
   )
 )
 
+;; OBSOLETE - exploratory prototype code
 (defn insert-quadtree [quadtree data x y z]
   (private-insert-quadtree quadtree data x y z 0 0 1)
 )
 
+;; OBSOLETE - exploratory prototype code
 ;; seek-quadtree requires a valid node at (x, y, z),
 ;; which impleies that insert-quadtree should be called
 ;; prior to calling seek-quadtree;
@@ -183,6 +193,7 @@
   )
 )
 
+;; OBSOLETE - exploratory prototype code
 (defn seek-quadtree [quadtree x y z]
   (private-seek-quadtree quadtree x y z 1)
 )

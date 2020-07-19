@@ -2,6 +2,9 @@
   (:require [quadtree-viewer.geometry :as geometry])
 )
 
+;; Create a camera that tracks mouse movement;
+;; There might be better ways to do this in THREE.js, but the cost of writing it
+;; was less than figuring out how to do it in THREE.js.
 (def camera nil)
 
 ;; Scale factors
@@ -17,6 +20,7 @@
 ;; Scroll wheel state
 (def z 1)
 
+;; camera-update - update camera to reflect the state of the mouse and scroll wheel.
 (defn camera-update []
   (let [
     position (. camera -position)
@@ -33,6 +37,7 @@
   )
 )
 
+;; Mouse event handler.
 (defn mousemove-handler [evt]
   (let [
     dx (. evt -movementX)
@@ -49,6 +54,7 @@
     )
   )
 
+;; Mouse event handler.
 (defn mousedown-handler [evt]
   (do
     (set! x 0)
@@ -56,6 +62,7 @@
     (camera-update)
     (set! is-moving true)))
 
+;; Mouse event handler.
 (defn mouseup-handler [evt]
   (let [
     dx (. evt -movementX)
@@ -69,6 +76,7 @@
       ;;(println "mouse up at: (" x " ," y ")")
     )))
 
+;; Scroll wheel event handler.
 ;; Scroll wheel tracks the y coordinate but modifies the camera's z coordinate.
 (defn scroll-handler [evt]
   (do
@@ -77,6 +85,7 @@
     ;;(println "scroll: " z)
   ))
 
+;; Create camera and  capturing mouse/scroll events.
 (defn make-camera [target]
   (.addEventListener target "wheel" scroll-handler)
   (.addEventListener target "mousemove" mousemove-handler)
@@ -84,6 +93,7 @@
   (.addEventListener target "mouseup" mouseup-handler)
   )
 
+;; Get current state of THREE.js camera.
 (defn track-camera [threejs-camera target]
   (set! camera threejs-camera)
   (make-camera target)
