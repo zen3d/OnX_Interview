@@ -15,7 +15,7 @@
 (def is-moving false)
 
 ;; Scroll wheel state
-(def z 2)
+(def z 1)
 
 (defn camera-update []
   (let [
@@ -26,7 +26,7 @@
     (set! (.. position -x) x-new)
     (set! (.. position -y) y-new)
     (set! (.. position -z) z)
-    (println "camera position: " (.. position -x) (.. position -y) (.. position -z))
+    ;;(println "camera position: " (.. position -x) (.. position -y) (.. position -z))
     (set! x 0)
     (set! y 0)
     ;;(set! z 1)
@@ -72,7 +72,7 @@
 ;; Scroll wheel tracks the y coordinate but modifies the camera's z coordinate.
 (defn scroll-handler [evt]
   (do
-    (set! z (min 2 (if (> 0 (+ z (. evt -deltaY))) (* z z-scale) (/ z z-scale))))
+    (set! z (min 1 (if (> 0 (+ z (. evt -deltaY))) (* z z-scale) (/ z z-scale))))
     (camera-update)
     ;;(println "scroll: " z)
   ))

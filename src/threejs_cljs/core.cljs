@@ -57,11 +57,12 @@
       geo (js/THREE.Geometry.)
       verts (. geo -vertices)
       faces (. geo -faces)
+      r 0.995 ;; inset square edge a little bit
     ]
-    (. verts push (js/THREE.Vector3. -1 -1 0))
-    (. verts push (js/THREE.Vector3. 1 -1  0))
-    (. verts push (js/THREE.Vector3. 1 1 0))
-    (. verts push (js/THREE.Vector3. -1 1 0))
+    (. verts push (js/THREE.Vector3. (- r) (- r) 0))
+    (. verts push (js/THREE.Vector3. r (- r)  0))
+    (. verts push (js/THREE.Vector3. r r 0))
+    (. verts push (js/THREE.Vector3. (- r) r 0))
     (. verts push (js/THREE.Vector3. 0 0 0))
 
     (. faces push (js/THREE.Face3. 0 1 4))
@@ -80,6 +81,80 @@
 (def y-last 0)
 (def z-last 0)
 
+(defn add-group-geometries [group geometries]
+  (println "group: " group)
+  (if (empty? geometries)
+    group
+    (add-group-geometries (.add group (first geometries)) (rest geometries))
+  )
+)
+
+(defn private-make-squares [num result]
+  (if (> num 0)
+    (let
+      [
+        square-geometry (make-square) ;; square-geo ;;  (js/THREE.CubeGeometry. 1 1 1)
+        square-wireframe (js/THREE.WireframeGeometry. square-geometry)
+        ;; material (js/THREE.LineBasicMaterial. );;(js/THREE.MeshBasicMaterial. (clj->js {:color 0x00ff00}))
+        square-mesh (js/THREE.LineSegments. square-wireframe);;(js/THREE.Mesh. geometry material)
+      ]
+      (private-make-squares (- num 1) (cons square-mesh result))
+    )
+    result
+  )
+)
+
+(defn make-squares [num]
+  (private-make-squares num '())
+)
+
+(def group-squares (add-group-geometries (js/THREE.Group.) (make-squares 9)))
+
+(defn render-candidate [candidate geometry]
+  (if (nil? candidate)
+    (set! (.. geometry -visible) js/false)
+    (let
+      [
+        bounds (:bounds candidate)
+        lo (:lo bounds)
+        hi (:hi bounds)
+        mid (geometry/mid-point lo hi)
+        x-mid (:x mid)
+        y-mid (:y mid)
+        x-scale (* 0.5 (- (:x hi) (:x lo)))
+        y-scale (* 0.5 (- (:y hi) (:y lo)))
+      ]
+      (set! (.. geometry -visible) js/true)
+      (set! (.. geometry -position -x) x-mid)
+      (set! (.. geometry -position -y) y-mid)
+      (set! (.. geometry -scale -x) x-scale)
+      (set! (.. geometry -scale -y) y-scale)
+    )
+  )
+)
+
+(defn private-render-candidates [candidates group-children idx group-length]
+  (if (< idx group-length)
+    (do
+      (render-candidate (first candidates) (nth group-children idx))
+      (private-render-candidates (rest candidates) group-children (+ idx 1) group-length)
+    )
+  )
+)
+
+(defn render-candidates [candidates]
+  (let
+    [
+      group-children (.. group-squares -children)
+      group-length (.. group-children -length)
+    ]
+    (private-render-candidates candidates group-children 0 group-length)
+  )
+  ;;(if (not (nil? candidates))
+  ;;  (render-candidate (first candidates) group)
+  ;;  (render-candidates (rest candidates) group)
+  ;;)
+)
 
 (defn ^:export quadtree-viewer []
   (let
@@ -96,21 +171,25 @@
       material (js/THREE.LineBasicMaterial. );;(js/THREE.MeshBasicMaterial. (clj->js {:color 0x00ff00}))
       cube (js/THREE.LineSegments. wireframe);;(js/THREE.Mesh. geometry material)
       render (fn cb []
+        (js/requestAnimationFrame cb)
         (let
           [
             x (.. camera -position -x)
             y (.. camera -position -y)
             z (.. camera -position -z)
           ]
-          (js/requestAnimationFrame cb)
 
           ;; Don't traverse quadtree if camera has not moved.
           (if (or (not (== x x-last)) (not (== y y-last)) (not (== z z-last)))
             (do
-              (println "current cursor: " x y z) ;; DEBUG
-              (set! root (quadtree/insert-quadtree root nil x y z))
+              (pr "current cursor: " x y z) ;; DEBUG
+              (set! root (quadtree/expand-quadtree root (geometry/make-rect (- x z) (- y z) (+ x z) (+ y z)) z))
               (let
                 [
+                  size (geometry/Point. z z)
+                  center (geometry/Point. x y)
+                  bounds (geometry/Rect. (geometry/sub-point center size) (geometry/add-point center size))
+                  candidates (quadtree/filter-quadtree root bounds z)
                   leaf (quadtree/seek-quadtree root x y z)
                   bounds (:bounds leaf)
                   x-lo (:x (:lo bounds))
@@ -122,10 +201,12 @@
                   x-scale (* 0.5 (- x-hi x-lo))
                   y-scale (* 0.5 (- y-hi y-lo))
                 ]
-                (set! (.. cube -position -x) x-mid)
-                (set! (.. cube -position -y) (- y-mid))
-                (set! (.. cube -scale -x) x-scale)
-                (set! (.. cube -scale -y) y-scale)
+                (println "Number of candidates: " (count candidates))
+                ;;(set! (.. cube -position -x) x-mid)
+                ;;(set! (.. cube -position -y) (- y-mid))
+                ;;(set! (.. cube -scale -x) x-scale)
+                ;;(set! (.. cube -scale -y) y-scale)
+                (render-candidates candidates)
               )
             )
           )
@@ -141,7 +222,7 @@
     (mouse-tracker/track-camera camera js/document)
     (.setSize renderer width height)
     (.appendChild js/document.body (.-domElement renderer) )
-    (.add scene cube)
+    (.add scene group-squares)
     (set! (.-z (.-position camera))  1)
     (render)
   )
