@@ -1,8 +1,8 @@
-(ns threejs-cljs.core
+(ns quadtree-viewer.core
   (:require
-    [threejs-cljs.quadtree :as quadtree]
-    [threejs-cljs.mouse-tracker :as mouse-tracker]
-    [threejs-cljs.geometry :as geometry]
+    [quadtree-viewer.quadtree :as quadtree]
+    [quadtree-viewer.mouse-tracker :as mouse-tracker]
+    [quadtree-viewer.geometry :as geometry]
   )
 )
 

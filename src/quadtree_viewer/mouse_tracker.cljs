@@ -1,5 +1,5 @@
-(ns threejs-cljs.mouse-tracker
-  (:require [threejs-cljs.geometry :as geometry])
+(ns quadtree-viewer.mouse-tracker
+  (:require [quadtree-viewer.geometry :as geometry])
 )
 
 (def camera nil)

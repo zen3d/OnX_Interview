@@ -1,5 +1,5 @@
-(ns threejs-cljs.quadtree
-  (:require [threejs-cljs.geometry :as geometry])
+(ns quadtree-viewer.quadtree
+  (:require [quadtree-viewer.geometry :as geometry])
 )
 
 (defrecord Quadtree [bounds child00 child01 child10 child11 data])

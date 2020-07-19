@@ -1,4 +1,4 @@
-(ns threejs-cljs.geometry)
+(ns quadtree-viewer.geometry)
 
 (defrecord Point [x y])
 
